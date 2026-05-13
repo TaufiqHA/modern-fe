@@ -75,7 +75,7 @@ export default function App() {
   return (
     <AuthProvider>
       <CartProvider>
-        <Router>
+        <Router basename={import.meta.env.BASE_URL}>
           <AppContent />
         </Router>
       </CartProvider>
