@@ -1,22 +1,59 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Star, Truck, ShieldCheck, ArrowLeft, Plus, Minus, ShoppingCart } from 'lucide-react';
-import { PRODUCTS } from '../data/products';
+import { Star, Truck, ShieldCheck, ArrowLeft, Plus, Minus, ShoppingCart, Loader2 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { Product } from '../types';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 const ProductDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { addToCart } = useCart();
-    const product = PRODUCTS.find(p => p.id === Number(id));
+    const [product, setProduct] = useState<Product | null>(null);
     const [quantity, setQuantity] = useState(1);
     const [activeTab, setActiveTab] = useState('Deskripsi');
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    if (!product) {
+    useEffect(() => {
+        const fetchProduct = async () => {
+            setIsLoading(true);
+            setError(null);
+            try {
+                const response = await fetch(`${API_URL}/products/${id}`);
+                if (!response.ok) {
+                    throw new Error('Produk tidak ditemukan');
+                }
+                const data = await response.json();
+                setProduct(data.data || data);
+            } catch (err: any) {
+                console.error('Failed to fetch product:', err);
+                setError(err.message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        if (id) {
+            fetchProduct();
+        }
+    }, [id]);
+
+    if (isLoading) {
+        return (
+            <div className="pt-60 pb-60 flex flex-col items-center justify-center gap-4">
+                <Loader2 className="animate-spin text-gray-100" size={48} />
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">Memuat Detail Produk...</p>
+            </div>
+        );
+    }
+
+    if (error || !product) {
         return (
             <div className="pt-40 pb-40 text-center">
-                <h2 className="text-2xl font-bold mb-4">Produk tidak ditemukan</h2>
+                <h2 className="text-2xl font-bold mb-4">{error || 'Produk tidak ditemukan'}</h2>
                 <Link to="/shop" className="text-blue-600 font-bold uppercase tracking-widest text-xs">Kembali ke Katalog</Link>
             </div>
         );
@@ -115,38 +152,38 @@ const ProductDetail = () => {
                             </p>
                             </div>
 
-                        <div className="grid sm:grid-cols-2 gap-4">
-                            {product.stock > 0 ? (
-                                <>
+                            <div className="grid sm:grid-cols-2 gap-4">
+                                {product.stock > 0 ? (
+                                    <>
+                                        <button
+                                            onClick={() => {
+                                                addToCart(product, quantity);
+                                                navigate('/checkout');
+                                            }} 
+                                            className="px-8 py-5 bg-black text-white text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3"
+                                        >
+                                            Beli Sekarang
+                                        </button>
+                                        <button 
+                                            onClick={() => {
+                                                addToCart(product, quantity);
+                                                navigate('/cart');
+                                            }}
+                                            className="px-8 py-5 border border-gray-100 text-gray-900 text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:border-gray-900 transition-all flex items-center justify-center gap-3"
+                                        >
+                                            <ShoppingCart size={16} />
+                                            Keranjang
+                                        </button>
+                                    </>
+                                ) : (
                                     <button
-                                        onClick={() => {
-                                            addToCart(product, quantity);
-                                            navigate('/checkout');
-                                        }} 
-                                        className="px-8 py-5 bg-black text-white text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3"
+                                        onClick={() => navigate(`/pre-order/${product.id}`)} 
+                                        className="sm:col-span-2 px-8 py-5 bg-amber-600 text-white text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-amber-700 transition-all flex items-center justify-center gap-3 shadow-xl shadow-amber-50"
                                     >
-                                        Beli Sekarang
+                                        Pre-Order Sekarang
                                     </button>
-                                    <button 
-                                        onClick={() => {
-                                            addToCart(product, quantity);
-                                            navigate('/cart');
-                                        }}
-                                        className="px-8 py-5 border border-gray-100 text-gray-900 text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:border-gray-900 transition-all flex items-center justify-center gap-3"
-                                    >
-                                        <ShoppingCart size={16} />
-                                        Keranjang
-                                    </button>
-                                </>
-                            ) : (
-                                <button
-                                    onClick={() => navigate(`/pre-order/${product.id}`)} 
-                                    className="sm:col-span-2 px-8 py-5 bg-amber-600 text-white text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-amber-700 transition-all flex items-center justify-center gap-3 shadow-xl shadow-amber-50"
-                                >
-                                    Pre-Order Sekarang
-                                </button>
-                            )}
-                        </div>
+                                )}
+                            </div>
 
                             <div className="grid grid-cols-2 gap-6 mt-12 bg-gray-50/50 rounded-2xl p-6 border border-gray-50">
                                 <div className="flex items-center gap-3">

@@ -1,11 +1,32 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ProductCard from '../components/ui/ProductCard';
-import { PRODUCTS } from '../data/products';
+import { Product } from '../types';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 const Home = () => {
-  const featuredProducts = PRODUCTS.slice(0, 4);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchFeatured = async () => {
+      try {
+        const response = await fetch(`${API_URL}/products?limit=4`);
+        const data = await response.json();
+        // Support { data: [...] } and directly [...]
+        setProducts(data.data || data);
+      } catch (error) {
+        console.error('Failed to fetch featured products:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchFeatured();
+  }, []);
 
   return (
     <main className="pt-20">
@@ -54,11 +75,22 @@ const Home = () => {
             <Link to="/collections" className="text-sm font-bold text-gray-300 tracking-widest uppercase hover:text-gray-900 transition-colors">Edisi 01 — Lihat Semua</Link>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 md:gap-x-10 gap-y-12 md:gap-y-16">
-            {featuredProducts.map((product, idx) => (
-              <ProductCard key={product.id} product={product} idx={idx} />
-            ))}
-          </div>
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <Loader2 className="animate-spin text-gray-100" size={48} />
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">Memuat Koleksi...</p>
+            </div>
+          ) : products.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 md:gap-x-10 gap-y-12 md:gap-y-16">
+              {products.map((product, idx) => (
+                <ProductCard key={product.id} product={product} idx={idx} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-20 bg-gray-50 rounded-[2.5rem] border border-gray-100">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Belum ada produk untuk ditampilkan.</p>
+            </div>
+          )}
         </div>
       </section>
     </main>

@@ -1,14 +1,50 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronRight, CreditCard, Truck, MapPin, CheckCircle2, ArrowRight } from 'lucide-react';
+import { ChevronRight, CreditCard, Truck, MapPin, CheckCircle2, ArrowRight, Loader2, Plus } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { Address } from '../types';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 const Checkout = () => {
     const [step, setStep] = useState(1);
+    const [addresses, setAddresses] = useState<Address[]>([]);
+    const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+    const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
     const navigate = useNavigate();
     const { cart, cartTotal, clearCart } = useCart();
+    const { token } = useAuth();
     
+    useEffect(() => {
+        const fetchAddresses = async () => {
+            if (!token) return;
+            try {
+                const response = await fetch(`${API_URL}/user/addresses`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                const addrList = data.addresses || data.data?.addresses || data.data || [];
+                setAddresses(addrList);
+                
+                // Select default address
+                const defaultAddr = addrList.find((a: Address) => a.is_default);
+                if (defaultAddr) {
+                    setSelectedAddressId(defaultAddr.id);
+                } else if (addrList.length > 0) {
+                    setSelectedAddressId(addrList[0].id);
+                }
+            } catch (error) {
+                console.error('Failed to fetch addresses:', error);
+            } finally {
+                setIsLoadingAddresses(false);
+            }
+        };
+
+        fetchAddresses();
+    }, [token]);
+
     const steps = [
         { id: 1, name: 'Alamat', icon: MapPin },
         { id: 2, name: 'Pengiriman', icon: Truck },
@@ -62,35 +98,59 @@ const Checkout = () => {
                                     className="space-y-8"
                                 >
                                     <h3 className="text-xl font-bold mb-6">Pilih Alamat Pengiriman</h3>
-                                    <div className="space-y-4">
-                                        <div className="p-6 border-2 border-black rounded-2xl bg-gray-50 flex items-start justify-between">
-                                            <div>
-                                                <p className="font-black text-xs uppercase tracking-widest mb-2">Rumah (Utama)</p>
-                                                <p className="text-sm font-medium text-gray-500 leading-relaxed">
-                                                    John Doe (+62 812 3456 7890) <br />
-                                                    Jl. Mawar No. 5, Kec. Rappocini, Kota Makassar <br />
-                                                    Sulawesi Selatan, 90222
-                                                </p>
-                                            </div>
-                                            <div className="bg-black text-white p-1 rounded-full">
-                                                <CheckCircle2 size={14} />
-                                            </div>
+                                    
+                                    {isLoadingAddresses ? (
+                                        <div className="flex flex-col items-center justify-center py-12 gap-4">
+                                            <Loader2 className="animate-spin text-gray-200" size={32} />
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">Memuat Alamat...</p>
                                         </div>
-                                        <div className="p-6 border border-gray-100 rounded-2xl hover:border-gray-200 transition-colors flex items-start justify-between cursor-pointer group">
-                                            <div>
-                                                <p className="font-black text-xs uppercase tracking-widest mb-2 text-gray-400 group-hover:text-gray-900 transition-colors">Kantor</p>
-                                                <p className="text-sm font-medium text-gray-400 group-hover:text-gray-600 transition-colors leading-relaxed">
-                                                    Jl. Sudirman No. 10, Menara Global Lt. 5, Jakarta Selatan
-                                                </p>
-                                            </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {addresses.length > 0 ? (
+                                                addresses.map((addr) => (
+                                                    <div 
+                                                        key={addr.id}
+                                                        onClick={() => setSelectedAddressId(addr.id)}
+                                                        className={`p-6 border-2 rounded-2xl transition-all cursor-pointer flex items-start justify-between ${
+                                                            selectedAddressId === addr.id ? 'border-black bg-gray-50' : 'border-gray-100 hover:border-gray-200 bg-white'
+                                                        }`}
+                                                    >
+                                                        <div>
+                                                            <div className="flex items-center gap-3 mb-2">
+                                                                <p className="font-black text-xs uppercase tracking-widest">{addr.label}</p>
+                                                                {addr.is_default && (
+                                                                    <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-black uppercase tracking-widest rounded-full">Utama</span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-sm font-medium text-gray-500 leading-relaxed">
+                                                                {addr.recipient} ({addr.phone}) <br />
+                                                                {addr.detail}
+                                                            </p>
+                                                        </div>
+                                                        {selectedAddressId === addr.id && (
+                                                            <div className="bg-black text-white p-1 rounded-full">
+                                                                <CheckCircle2 size={14} />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-100">
+                                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Belum ada alamat tersimpan</p>
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
-                                    <button className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600 hover:underline">+ Tambah Alamat Baru</button>
+                                    )}
+
+                                    <Link to="/account/addresses" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-blue-600 hover:underline">
+                                        <Plus size={14} /> Kelola Alamat
+                                    </Link>
                                     
                                     <div className="pt-8 border-t border-gray-50">
                                         <button 
+                                            disabled={!selectedAddressId}
                                             onClick={() => setStep(2)}
-                                            className="w-full py-5 bg-black text-white text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3"
+                                            className="w-full py-5 bg-black text-white text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                                         >
                                             Lanjut ke Pengiriman <ArrowRight size={16} />
                                         </button>

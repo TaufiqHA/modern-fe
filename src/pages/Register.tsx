@@ -6,7 +6,13 @@ import { useAuth } from '../context/AuthContext';
 
 const Register = () => {
     const [isLoading, setIsLoading] = useState(false);
-    const { login } = useAuth();
+    const [error, setError] = useState<string | null>(null);
+    const [formData, setFormData] = useState({
+        name: '',
+        email: '',
+        password: ''
+    });
+    const { register } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -15,9 +21,16 @@ const Register = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        await login('newuser@example.com');
-        navigate(from, { replace: true });
-        setIsLoading(false);
+        setError(null);
+        
+        try {
+            await register(formData);
+            navigate(from, { replace: true });
+        } catch (err: any) {
+            setError(err.message || 'Gagal mendaftar. Silakan coba lagi.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -32,6 +45,12 @@ const Register = () => {
                     <p className="text-gray-400 font-medium">Bergabunglah dengan komunitas kami untuk mendapatkan benefit eksklusif.</p>
                 </header>
 
+                {error && (
+                    <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-bold text-center">
+                        {error}
+                    </div>
+                )}
+
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Nama Lengkap</label>
@@ -42,6 +61,8 @@ const Register = () => {
                                 type="text" 
                                 placeholder="Masukkan nama Anda"
                                 className="w-full bg-gray-50 border border-gray-50 rounded-2xl pl-14 pr-6 py-4 text-xs font-bold focus:outline-none focus:border-blue-600 transition-colors placeholder:text-gray-300"
+                                value={formData.name}
+                                onChange={(e) => setFormData({...formData, name: e.target.value})}
                             />
                         </div>
                     </div>
@@ -55,6 +76,8 @@ const Register = () => {
                                 type="email" 
                                 placeholder="nama@email.com"
                                 className="w-full bg-gray-50 border border-gray-50 rounded-2xl pl-14 pr-6 py-4 text-xs font-bold focus:outline-none focus:border-blue-600 transition-colors placeholder:text-gray-300"
+                                value={formData.email}
+                                onChange={(e) => setFormData({...formData, email: e.target.value})}
                             />
                         </div>
                     </div>
@@ -68,6 +91,8 @@ const Register = () => {
                                 type="password" 
                                 placeholder="Min. 8 Karakter"
                                 className="w-full bg-gray-50 border border-gray-50 rounded-2xl pl-14 pr-6 py-4 text-xs font-bold focus:outline-none focus:border-blue-600 transition-colors placeholder:text-gray-300"
+                                value={formData.password}
+                                onChange={(e) => setFormData({...formData, password: e.target.value})}
                             />
                         </div>
                     </div>

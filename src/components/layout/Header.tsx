@@ -10,7 +10,7 @@ const Header = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { cartCount, cart, cartTotal } = useCart();
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
   const menuItems = [
@@ -132,7 +132,9 @@ const Header = () => {
             </AnimatePresence>
           </div>
           <div className="relative">
-            {isAuthenticated ? (
+            {isLoading ? (
+                <div className="w-8 h-8 rounded-full bg-gray-50 animate-pulse border border-gray-100"></div>
+            ) : isAuthenticated ? (
               <button 
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                 className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 border border-gray-100 flex items-center justify-center hover:border-gray-900 transition-colors"

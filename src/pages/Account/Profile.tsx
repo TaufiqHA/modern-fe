@@ -4,13 +4,29 @@ import { useAuth } from '../../context/AuthContext';
 import AccountLayout from './AccountLayout';
 
 const Profile = () => {
-    const { user } = useAuth();
+    const { user, updateUser } = useAuth();
+    const [isSaving, setIsSaving] = useState(false);
     const [formData, setFormData] = useState({
         name: user?.name || '',
         email: user?.email || '',
-        phone: '081234567890',
-        bio: 'Minimalist enthusiast.'
+        phone: user?.phone || '',
+        bio: user?.bio || ''
     });
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            await updateUser({
+                name: formData.name,
+                phone: formData.phone,
+                bio: formData.bio
+            });
+        } catch (error) {
+            console.error('Update failed:', error);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     return (
         <AccountLayout>
@@ -24,7 +40,7 @@ const Profile = () => {
                 <div className="flex flex-col sm:flex-row items-center gap-8">
                     <div className="relative group">
                         <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-100 border-4 border-white shadow-xl">
-                            <img src={user?.avatar} alt="Profile" className="w-full h-full object-cover" />
+                            <img src={user?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200'} alt="Profile" className="w-full h-full object-cover" />
                         </div>
                         <button className="absolute bottom-0 right-0 w-10 h-10 bg-black text-white rounded-full flex items-center justify-center border-4 border-white shadow-lg hover:bg-blue-600 transition-colors">
                             <Camera size={16} />
@@ -77,8 +93,17 @@ const Profile = () => {
                 </div>
 
                 <div className="pt-8">
-                    <button className="flex items-center gap-3 bg-black text-white px-10 py-5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-blue-600 transition-all shadow-xl shadow-gray-100">
-                        <Save size={16} /> Simpan Perubahan
+                    <button 
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        className="flex items-center gap-3 bg-black text-white px-10 py-5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-blue-600 transition-all shadow-xl shadow-gray-100 disabled:opacity-50"
+                    >
+                        {isSaving ? (
+                            <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                        ) : (
+                            <Save size={16} />
+                        )} 
+                        {isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
                     </button>
                 </div>
             </div>

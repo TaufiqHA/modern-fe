@@ -6,10 +6,11 @@ import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
     const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('email');
-    const [formData, setFormData] = useState({ email: '', phone: '', otp: '' });
+    const [formData, setFormData] = useState({ email: '', password: '', phone: '', otp: '' });
     const [isOtpSent, setIsOtpSent] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const { login } = useAuth();
+    const [error, setError] = useState<string | null>(null);
+    const { login, sendOtp, verifyOtp } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -18,17 +19,26 @@ const Login = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
+        setError(null);
         
-        if (loginMethod === 'phone' && !isOtpSent) {
-            // Simulasi kirim OTP
-            await new Promise(r => setTimeout(r, 800));
-            setIsOtpSent(true);
-        } else {
-            // Proses login
-            await login(loginMethod === 'email' ? formData.email : formData.phone);
-            navigate(from, { replace: true });
+        try {
+            if (loginMethod === 'email') {
+                await login(formData.email, formData.password);
+                navigate(from, { replace: true });
+            } else {
+                if (!isOtpSent) {
+                    await sendOtp(formData.phone);
+                    setIsOtpSent(true);
+                } else {
+                    await verifyOtp(formData.phone, formData.otp);
+                    navigate(from, { replace: true });
+                }
+            }
+        } catch (err: any) {
+            setError(err.message || 'Terjadi kesalahan. Silakan coba lagi.');
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     };
 
     return (
@@ -43,15 +53,21 @@ const Login = () => {
                     <p className="text-gray-400 font-medium">Masuk ke akun Anda untuk pengalaman belanja yang lebih personal.</p>
                 </header>
 
+                {error && (
+                    <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-bold text-center">
+                        {error}
+                    </div>
+                )}
+
                 <div className="flex bg-gray-50 p-1.5 rounded-2xl mb-10">
                     <button 
-                        onClick={() => { setLoginMethod('email'); setIsOtpSent(false); }}
+                        onClick={() => { setLoginMethod('email'); setIsOtpSent(false); setError(null); }}
                         className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${loginMethod === 'email' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}
                     >
                         Email
                     </button>
                     <button 
-                        onClick={() => { setLoginMethod('phone'); setIsOtpSent(false); }}
+                        onClick={() => { setLoginMethod('phone'); setIsOtpSent(false); setError(null); }}
                         className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${loginMethod === 'phone' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}
                     >
                         Nomor HP
@@ -89,6 +105,8 @@ const Login = () => {
                                         type="password" 
                                         placeholder="••••••••"
                                         className="w-full bg-gray-50 border border-gray-50 rounded-2xl px-6 py-4 text-xs font-bold focus:outline-none focus:border-blue-600 transition-colors placeholder:text-gray-300"
+                                        value={formData.password}
+                                        onChange={(e) => setFormData({...formData, password: e.target.value})}
                                     />
                                 </div>
                             </motion.div>
@@ -118,8 +136,8 @@ const Login = () => {
                                 
                                 {isOtpSent && (
                                     <motion.div 
-                                        initial={{ opacity: 0, h: 0 }}
-                                        animate={{ opacity: 1, h: 'auto' }}
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
                                         className="space-y-2"
                                     >
                                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Kode OTP</label>
@@ -144,7 +162,7 @@ const Login = () => {
                         type="submit" 
                         className="w-full py-5 bg-black text-white text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                     >
-                        {isLoading ? 'Memproses...' : (isOtpSent ? 'Masuk' : 'Lanjutkan')} {!isLoading && <ArrowRight size={16} />}
+                        {isLoading ? 'Memproses...' : (isOtpSent ? 'Masuk' : (loginMethod === 'phone' ? 'Kirim OTP' : 'Masuk'))} {!isLoading && <ArrowRight size={16} />}
                     </button>
                 </form>
 
