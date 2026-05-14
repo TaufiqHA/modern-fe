@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+/// <reference types="vite/client" />
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Filter, Loader2, RefreshCcw } from 'lucide-react';
 import ProductCard from '../components/ui/ProductCard';
@@ -19,9 +20,12 @@ const Shop = () => {
     try {
       const response = await fetch(`${API_URL}/categories`);
       const data = await response.json();
-      setCategories(data.data || data);
+      
+      const categoryData = Array.isArray(data) ? data : (data.data || []);
+      setCategories(categoryData);
     } catch (error) {
       console.error('Failed to fetch categories:', error);
+      setCategories([]);
     }
   };
 
@@ -96,7 +100,7 @@ const Shop = () => {
                 >
                     Semua
                 </button>
-                {categories.map(cat => (
+                {Array.isArray(categories) && categories.map(cat => (
                     <button 
                         key={cat.id}
                         onClick={() => setSelectedCategory(cat.name)}
@@ -125,7 +129,9 @@ const Shop = () => {
             <div className="space-y-20">
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 md:gap-x-10 gap-y-12 md:gap-y-16">
                     {products.map((product, idx) => (
-                        <ProductCard key={`${product.id}-${idx}`} product={product} idx={idx} />
+                        <div key={`${product.id}-${idx}`}>
+                            <ProductCard product={product} idx={idx} />
+                        </div>
                     ))}
                 </div>
 

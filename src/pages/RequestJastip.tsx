@@ -1,31 +1,84 @@
-import { useState } from 'react';
+/// <reference types="vite/client" />
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Upload, ArrowLeft, Send, CheckCircle2, QrCode } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Upload, ArrowLeft, Send, CheckCircle2, QrCode, Loader2, AlertCircle } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const RequestJastip = () => {
+    const { token, isAuthenticated } = useAuth();
+    const navigate = useNavigate();
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [requestId, setRequestId] = useState<string | null>(null);
+    
     const [formData, setFormData] = useState({
-        fullName: '',
-        phone: '',
-        email: '',
+        productName: '',
         productLink: '',
         quantity: 1,
         notes: ''
     });
+    
     const [fileName, setFileName] = useState<string | null>(null);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    useEffect(() => {
+        if (!isAuthenticated) {
+            navigate('/login?redirect=/request-jastip');
+        }
+    }, [isAuthenticated, navigate]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Simulate submission
-        setTimeout(() => {
+        if (!token) {
+            setError('Anda harus login terlebih dahulu');
+            return;
+        }
+
+        setIsSubmitting(true);
+        setError(null);
+
+        try {
+            const data = new FormData();
+            data.append('product_name', formData.productName);
+            data.append('product_link', formData.productLink);
+            data.append('quantity', formData.quantity.toString());
+            data.append('notes', formData.notes);
+            if (selectedFile) {
+                data.append('image', selectedFile);
+            }
+
+            const response = await fetch(`${API_URL}/jastip/request`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: data
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || 'Gagal mengirim request');
+            }
+
+            setRequestId(result.data?.request_id || result.request_id || `#JS-${Math.floor(100000 + Math.random() * 900000)}`);
             setIsSubmitted(true);
-        }, 800);
+        } catch (err: any) {
+            setError(err.message || 'Terjadi kesalahan saat mengirim request');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            setFileName(e.target.files[0].name);
+            const file = e.target.files[0];
+            setSelectedFile(file);
+            setFileName(file.name);
         }
     };
 
@@ -47,7 +100,7 @@ const RequestJastip = () => {
                     <div className="bg-gray-50 border border-gray-100 rounded-3xl p-8 mb-12">
                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 text-left">Nomor Request</p>
                         <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-50 shadow-sm">
-                            <span className="font-mono font-black text-xl">#JS-{Math.floor(100000 + Math.random() * 900000)}</span>
+                            <span className="font-mono font-black text-xl">{requestId}</span>
                             <QrCode size={24} className="text-gray-200" />
                         </div>
                     </div>
@@ -72,48 +125,12 @@ const RequestJastip = () => {
                 </header>
 
                 <form onSubmit={handleSubmit} className="space-y-12">
-                    {/* Identity Section */}
-                    <section>
-                        <div className="flex items-center gap-4 mb-10">
-                           <div className="w-8 h-[1px] bg-gray-200"></div>
-                           <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Informasi Pribadi</h3>
+                    {error && (
+                        <div className="bg-red-50 border border-red-100 text-red-600 p-4 rounded-2xl flex items-center gap-3 text-xs font-bold">
+                            <AlertCircle size={18} />
+                            {error}
                         </div>
-                        <div className="grid md:grid-cols-2 gap-8">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Nama Lengkap</label>
-                                <input 
-                                    required
-                                    type="text" 
-                                    placeholder="Masukkan nama Anda"
-                                    className="w-full bg-gray-50 border border-gray-50 rounded-2xl px-6 py-4 text-xs font-bold focus:outline-none focus:border-blue-600 transition-colors placeholder:text-gray-300"
-                                    value={formData.fullName}
-                                    onChange={(e) => setFormData({...formData, fullName: e.target.value})}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Nomor WhatsApp</label>
-                                <input 
-                                    required
-                                    type="tel" 
-                                    placeholder="0812xxxxxxx"
-                                    className="w-full bg-gray-50 border border-gray-50 rounded-2xl px-6 py-4 text-xs font-bold focus:outline-none focus:border-blue-600 transition-colors placeholder:text-gray-300"
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                                />
-                            </div>
-                            <div className="space-y-2 md:col-span-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Email</label>
-                                <input 
-                                    required
-                                    type="email" 
-                                    placeholder="email@example.com"
-                                    className="w-full bg-gray-50 border border-gray-50 rounded-2xl px-6 py-4 text-xs font-bold focus:outline-none focus:border-blue-600 transition-colors placeholder:text-gray-300"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                                />
-                            </div>
-                        </div>
-                    </section>
+                    )}
 
                     {/* Product Section */}
                     <section>
@@ -122,6 +139,18 @@ const RequestJastip = () => {
                            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Detail Titipan</h3>
                         </div>
                         <div className="space-y-8">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Nama Produk</label>
+                                <input 
+                                    required
+                                    type="text" 
+                                    placeholder="Contoh: Nike Dunk Low Retro"
+                                    className="w-full bg-gray-50 border border-gray-50 rounded-2xl px-6 py-4 text-xs font-bold focus:outline-none focus:border-blue-600 transition-colors placeholder:text-gray-300"
+                                    value={formData.productName}
+                                    onChange={(e) => setFormData({...formData, productName: e.target.value})}
+                                />
+                            </div>
+
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Link Produk</label>
                                 <input 
@@ -146,7 +175,7 @@ const RequestJastip = () => {
                                         />
                                         <div className="w-full bg-gray-50 border border-gray-100 border-dashed rounded-2xl p-10 flex flex-col items-center gap-4 group-hover:border-blue-600 transition-colors">
                                             <Upload className="text-gray-300" size={24} />
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 truncate max-w-full px-4">
                                                 {fileName || 'Unggah Referensi Foto'}
                                             </span>
                                         </div>
@@ -184,10 +213,15 @@ const RequestJastip = () => {
                     </section>
 
                     <button 
+                        disabled={isSubmitting}
                         type="submit" 
-                        className="w-full py-6 bg-black text-white text-xs font-black uppercase tracking-[0.3em] rounded-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-4 shadow-2xl shadow-gray-200"
+                        className="w-full py-6 bg-black text-white text-xs font-black uppercase tracking-[0.3em] rounded-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-4 shadow-2xl shadow-gray-200 disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
-                        Kirim Request <Send size={18} />
+                        {isSubmitting ? (
+                            <>Memproses... <Loader2 size={18} className="animate-spin" /></>
+                        ) : (
+                            <>Kirim Request <Send size={18} /></>
+                        )}
                     </button>
                     
                     <p className="text-center text-[10px] text-gray-400 font-medium">Dengan mengklik kirim, Anda menyetujui Ketentuan Layanan Jastip kami.</p>
@@ -198,3 +232,4 @@ const RequestJastip = () => {
 };
 
 export default RequestJastip;
+

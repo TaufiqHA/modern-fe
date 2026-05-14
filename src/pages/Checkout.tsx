@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+/// <reference types="vite/client" />
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronRight, CreditCard, Truck, MapPin, CheckCircle2, ArrowRight, Loader2, Plus } from 'lucide-react';
+import { ChevronRight, CreditCard, Truck, MapPin, CheckCircle2, ArrowRight, Loader2, Plus, AlertCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
@@ -8,16 +9,37 @@ import { Address } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
+interface ShippingRate {
+    id: string;
+    courier: string;
+    service: string;
+    cost: number;
+    etd: string;
+}
+
 const Checkout = () => {
     const [step, setStep] = useState(1);
     const [addresses, setAddresses] = useState<Address[]>([]);
     const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
     const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
+    
+    const [shippingRates, setShippingRates] = useState<ShippingRate[]>([]);
+    const [isLoadingShipping, setIsLoadingShipping] = useState(false);
+    const [selectedShipping, setSelectedShipping] = useState<ShippingRate | null>(null);
+    
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
     const navigate = useNavigate();
     const { cart, cartTotal, clearCart } = useCart();
-    const { token } = useAuth();
+    const { token, isAuthenticated } = useAuth();
     
     useEffect(() => {
+        if (!isAuthenticated) {
+            navigate('/login?redirect=/checkout');
+            return;
+        }
+
         const fetchAddresses = async () => {
             if (!token) return;
             try {
@@ -43,7 +65,100 @@ const Checkout = () => {
         };
 
         fetchAddresses();
-    }, [token]);
+    }, [token, isAuthenticated, navigate]);
+
+    // Fetch shipping rates when moving to Step 2
+    useEffect(() => {
+        const fetchShippingRates = async () => {
+            if (step === 2 && selectedAddressId && token) {
+                setIsLoadingShipping(true);
+                setError(null);
+                try {
+                    // In a real app, this would call an API like RajaOngkir
+                    // For now, we simulate with a slight delay
+                    const response = await fetch(`${API_URL}/shipping/rates`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}` 
+                        },
+                        body: JSON.stringify({
+                            address_id: selectedAddressId,
+                            weight: cart.reduce((total, item) => total + (item.quantity * 1000), 0) // default 1kg per item
+                        })
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        setShippingRates(data.rates || data.data || []);
+                    } else {
+                        // Fallback/Mock data if API not implemented
+                        setShippingRates([
+                            { id: 'jne-reg', courier: 'JNE', service: 'Reguler', cost: 15000, etd: '2-4 Hari' },
+                            { id: 'sicepat-reg', courier: 'SiCepat', service: 'Reguler', cost: 14000, etd: '2-3 Hari' },
+                            { id: 'tiki-reg', courier: 'TIKI', service: 'Reguler', cost: 15000, etd: '2-4 Hari' }
+                        ]);
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch shipping rates:', error);
+                    // Mock data fallback on error
+                    setShippingRates([
+                        { id: 'jne-reg', courier: 'JNE', service: 'Reguler', cost: 15000, etd: '2-4 Hari' },
+                        { id: 'sicepat-reg', courier: 'SiCepat', service: 'Reguler', cost: 14000, etd: '2-3 Hari' }
+                    ]);
+                } finally {
+                    setIsLoadingShipping(false);
+                }
+            }
+        };
+
+        fetchShippingRates();
+    }, [step, selectedAddressId, token, cart]);
+
+    const handleCreateOrder = async () => {
+        if (!selectedAddressId || !selectedShipping || !token) return;
+
+        setIsSubmitting(true);
+        setError(null);
+
+        try {
+            const response = await fetch(`${API_URL}/orders`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    address_id: selectedAddressId,
+                    shipping_id: selectedShipping.id,
+                    shipping_cost: selectedShipping.cost,
+                    items: cart.map(item => ({
+                        product_id: item.id,
+                        quantity: item.quantity
+                    })),
+                    payment_method: 'midtrans_va'
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || 'Gagal membuat pesanan');
+            }
+
+            clearCart();
+
+            if (result.data?.payment_url || result.payment_url) {
+                window.location.href = result.data?.payment_url || result.payment_url;
+            } else {
+                navigate('/order-confirmation', { state: { orderId: result.data?.id || result.id } });
+            }
+        } catch (err: any) {
+            setError(err.message || 'Terjadi kesalahan saat memproses pesanan');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     const steps = [
         { id: 1, name: 'Alamat', icon: MapPin },
@@ -51,7 +166,7 @@ const Checkout = () => {
         { id: 3, name: 'Pembayaran', icon: CreditCard },
     ];
 
-    const shippingCost = step >= 2 ? 15000 : 0;
+    const shippingCost = selectedShipping?.cost || 0;
     const finalTotal = cartTotal + shippingCost;
 
     return (
@@ -167,32 +282,43 @@ const Checkout = () => {
                                     className="space-y-8"
                                 >
                                     <h3 className="text-xl font-bold mb-6">Pilih Metode Pengiriman</h3>
-                                    <div className="space-y-4">
-                                        <div className="p-6 border-2 border-black rounded-2xl bg-gray-50 flex items-center justify-between">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 bg-white rounded-xl border border-gray-100 flex items-center justify-center">
-                                                    <Truck size={24} className="text-gray-400" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-black text-xs uppercase tracking-widest mb-1">Reguler (JNE)</p>
-                                                    <p className="text-[10px] text-gray-400 font-medium">Estimasi 2-4 Hari</p>
-                                                </div>
-                                            </div>
-                                            <p className="font-black text-sm">Rp 15.000</p>
+                                    
+                                    {isLoadingShipping ? (
+                                        <div className="flex flex-col items-center justify-center py-20 gap-4">
+                                            <Loader2 className="animate-spin text-blue-600" size={32} />
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Menghitung Ongkos Kirim...</p>
                                         </div>
-                                        <div className="p-6 border border-gray-100 rounded-2xl hover:border-gray-200 transition-colors flex items-center justify-between cursor-pointer group">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 bg-gray-50 rounded-xl border border-gray-50 flex items-center justify-center group-hover:bg-white transition-colors">
-                                                    <Truck size={24} className="text-gray-300 group-hover:text-gray-400" />
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {shippingRates.map((rate) => (
+                                                <div 
+                                                    key={rate.id}
+                                                    onClick={() => setSelectedShipping(rate)}
+                                                    className={`p-6 border-2 rounded-2xl transition-all cursor-pointer flex items-center justify-between ${
+                                                        selectedShipping?.id === rate.id ? 'border-black bg-gray-50' : 'border-gray-100 hover:border-gray-200 bg-white'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`w-12 h-12 rounded-xl border flex items-center justify-center transition-colors ${
+                                                            selectedShipping?.id === rate.id ? 'bg-white border-gray-100' : 'bg-gray-50 border-gray-50'
+                                                        }`}>
+                                                            <Truck size={24} className={selectedShipping?.id === rate.id ? 'text-blue-600' : 'text-gray-300'} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-black text-xs uppercase tracking-widest mb-1">{rate.courier} ({rate.service})</p>
+                                                            <p className="text-[10px] text-gray-400 font-medium">Estimasi {rate.etd}</p>
+                                                        </div>
+                                                    </div>
+                                                    <p className="font-black text-sm">Rp {rate.cost.toLocaleString('id-ID')}</p>
                                                 </div>
-                                                <div>
-                                                    <p className="font-black text-xs uppercase tracking-widest mb-1 text-gray-400 group-hover:text-gray-900 transition-colors">Express (SiCepat)</p>
-                                                    <p className="text-[10px] text-gray-300 group-hover:text-gray-400 font-medium">Estimasi 1-2 Hari</p>
+                                            ))}
+                                            {shippingRates.length === 0 && (
+                                                <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-100">
+                                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Gagal memuat layanan pengiriman</p>
                                                 </div>
-                                            </div>
-                                            <p className="font-black text-sm text-gray-300 group-hover:text-gray-900">Rp 28.000</p>
+                                            )}
                                         </div>
-                                    </div>
+                                    )}
                                     
                                     <div className="pt-8 border-t border-gray-50 flex gap-4">
                                         <button 
@@ -202,8 +328,9 @@ const Checkout = () => {
                                             Kembali
                                         </button>
                                         <button 
+                                            disabled={!selectedShipping}
                                             onClick={() => setStep(3)}
-                                            className="grow-[2] py-5 bg-black text-white text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3"
+                                            className="grow-[2] py-5 bg-black text-white text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                                         >
                                             Metode Pembayaran <ArrowRight size={16} />
                                         </button>
@@ -220,51 +347,49 @@ const Checkout = () => {
                                     className="space-y-8"
                                 >
                                     <h3 className="text-xl font-bold mb-6">Metode Pembayaran</h3>
+                                    
+                                    {error && (
+                                        <div className="bg-red-50 border border-red-100 text-red-600 p-4 rounded-2xl flex items-center gap-3 text-xs font-bold">
+                                            <AlertCircle size={18} />
+                                            {error}
+                                        </div>
+                                    )}
+
                                     <div className="space-y-4">
                                         <div className="p-6 border-2 border-black rounded-2xl bg-gray-50 flex items-center justify-between">
                                             <div className="flex items-center gap-4">
                                                 <div className="w-12 h-12 bg-white rounded-xl border border-gray-100 flex items-center justify-center">
-                                                    <CreditCard size={24} className="text-gray-400" />
+                                                    <CreditCard size={24} className="text-blue-600" />
                                                 </div>
                                                 <div>
-                                                    <p className="font-black text-xs uppercase tracking-widest mb-1">Transfer Bank (Virtual Account)</p>
-                                                    <p className="text-[10px] text-gray-400 font-medium">BCA, Mandiri, BNI, BRI</p>
+                                                    <p className="font-black text-xs uppercase tracking-widest mb-1">Otomatis (Midtrans)</p>
+                                                    <p className="text-[10px] text-gray-400 font-medium">VA, Kartu Kredit, QRIS, E-Wallet</p>
                                                 </div>
                                             </div>
                                             <div className="bg-black text-white p-1 rounded-full">
                                                 <CheckCircle2 size={14} />
                                             </div>
                                         </div>
-                                        {['E-Wallet', 'OVO / GoPay / Dana'].map((item) => (
-                                            <div key={item} className="p-6 border border-gray-100 rounded-2xl hover:border-gray-200 transition-colors flex items-center justify-between cursor-pointer group">
-                                                 <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 bg-gray-50 rounded-xl border border-gray-50 flex items-center justify-center">
-                                                        <CreditCard size={24} className="text-gray-300" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-black text-xs uppercase tracking-widest mb-1 text-gray-400 group-hover:text-gray-900 transition-colors">E-Wallet (Otomatis)</p>
-                                                        <p className="text-[10px] text-gray-300 font-medium">OVO, GoPay, Dana, LinkAja</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
                                     </div>
                                     
                                     <div className="pt-8 border-t border-gray-50 flex gap-4">
                                         <button 
+                                            disabled={isSubmitting}
                                             onClick={() => setStep(2)}
-                                            className="grow py-5 border border-gray-100 text-gray-900 text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:border-gray-900 transition-all"
+                                            className="grow py-5 border border-gray-100 text-gray-900 text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:border-gray-900 transition-all disabled:opacity-50"
                                         >
                                             Kembali
                                         </button>
                                         <button 
-                                            className="grow-[2] py-5 bg-blue-600 text-white text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-blue-700 transition-all flex items-center justify-center gap-3 shadow-lg shadow-blue-200"
-                                            onClick={() => {
-                                                clearCart();
-                                                navigate('/order-confirmation');
-                                            }}
+                                            disabled={isSubmitting}
+                                            className="grow-[2] py-5 bg-blue-600 text-white text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-blue-700 transition-all flex items-center justify-center gap-3 shadow-lg shadow-blue-200 disabled:bg-gray-400"
+                                            onClick={handleCreateOrder}
                                         >
-                                            Buat Pesanan
+                                            {isSubmitting ? (
+                                                <>Memproses... <Loader2 size={18} className="animate-spin" /></>
+                                            ) : (
+                                                <>Buat Pesanan & Bayar</>
+                                            )}
                                         </button>
                                     </div>
                                 </motion.div>
@@ -304,7 +429,7 @@ const Checkout = () => {
                                 </div>
                                 <div className="flex justify-between text-xs">
                                     <span className="text-gray-400 font-black uppercase tracking-widest">Ongkos Kirim</span>
-                                    <span className="font-black">{step >= 2 ? `Rp ${shippingCost.toLocaleString('id-ID')}` : '—'}</span>
+                                    <span className="font-black">{step >= 2 ? (isLoadingShipping ? '...' : `Rp ${shippingCost.toLocaleString('id-ID')}`) : '—'}</span>
                                 </div>
                             </div>
 
@@ -321,3 +446,4 @@ const Checkout = () => {
 };
 
 export default Checkout;
+
