@@ -8,3 +8,6 @@ coverage/
 !.env.example
 GEMINI.md
 prompt
+planning.md
+ERD.md
+api-references.md
