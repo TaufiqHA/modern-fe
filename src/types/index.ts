@@ -49,3 +49,29 @@ export interface Category {
   name: string;
   icon: string;
 }
+
+export interface Collection {
+  id: number;
+  title: string;
+  description: string;
+  image: string;
+  slug: string;
+  count: number;
+}
+
+export interface StockLog {
+  id: number;
+  change: number;
+  type: 'In' | 'Out';
+  note: string;
+  date: string;
+}
+
+export interface Notification {
+  id: string;
+  title: string;
+  description: string;
+  type: 'order' | 'jastip' | 'payment' | 'alert';
+  unread: boolean;
+  created_at: string;
+}

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, ShoppingCart, Menu, X, User } from 'lucide-react';
+import { Search, ShoppingCart, Menu, X, User, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -11,6 +12,7 @@ const Header = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { cartCount, cart, cartTotal } = useCart();
   const { user, logout, isAuthenticated, isLoading } = useAuth();
+  const { unreadCount } = useNotifications();
   const location = useLocation();
 
   const menuItems = [
@@ -44,6 +46,18 @@ const Header = () => {
           <button className="text-gray-400 hover:text-gray-900 transition-colors hidden sm:block">
             <Search size={20} />
           </button>
+
+          <Link 
+            to={user?.role === 'admin' ? '/admin/notifications' : '/account/notifications'} 
+            className="relative text-gray-400 hover:text-gray-900 transition-colors"
+          >
+            <Bell size={20} />
+            {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white">
+                    {unreadCount}
+                </span>
+            )}
+          </Link>
           
           <div className="relative">
             <button 

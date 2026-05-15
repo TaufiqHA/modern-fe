@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import AccountLayout from './AccountLayout';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Home, Briefcase, MapPin, MoreVertical, X, Loader2 } from 'lucide-react';
+import { Plus, Home, Briefcase, MapPin, MoreVertical, X, Loader2, Save } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Address } from '../../types';
 
@@ -12,6 +12,7 @@ const Addresses = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [editingAddress, setEditingAddress] = useState<Address | null>(null);
     const [newAddress, setNewAddress] = useState({
         label: '',
         recipient: '',
@@ -40,12 +41,18 @@ const Addresses = () => {
         fetchAddresses();
     }, [token]);
 
-    const handleAddAddress = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSaving(true);
+        
+        const method = editingAddress ? 'PATCH' : 'POST';
+        const url = editingAddress 
+            ? `${API_URL}/user/addresses/${editingAddress.id}` 
+            : `${API_URL}/user/addresses`;
+
         try {
-            const response = await fetch(`${API_URL}/user/addresses`, {
-                method: 'POST',
+            const response = await fetch(url, {
+                method: method,
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
@@ -53,15 +60,45 @@ const Addresses = () => {
                 body: JSON.stringify(newAddress)
             });
             if (response.ok) {
-                setShowAddModal(false);
-                setNewAddress({ label: '', recipient: '', phone: '', detail: '' });
+                closeModal();
                 fetchAddresses();
             }
         } catch (error) {
-            console.error('Failed to add address:', error);
+            console.error(`Failed to ${editingAddress ? 'update' : 'add'} address:`, error);
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleDeleteAddress = async (id: number) => {
+        if (!window.confirm('Apakah Anda yakin ingin menghapus alamat ini?')) return;
+        
+        try {
+            const response = await fetch(`${API_URL}/user/addresses/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) fetchAddresses();
+        } catch (error) {
+            console.error('Failed to delete address:', error);
+        }
+    };
+
+    const handleEditClick = (addr: Address) => {
+        setEditingAddress(addr);
+        setNewAddress({
+            label: addr.label,
+            recipient: addr.recipient,
+            phone: addr.phone,
+            detail: addr.detail
+        });
+        setShowAddModal(true);
+    };
+
+    const closeModal = () => {
+        setShowAddModal(false);
+        setEditingAddress(null);
+        setNewAddress({ label: '', recipient: '', phone: '', detail: '' });
     };
 
     const getIcon = (label: string) => {
@@ -119,8 +156,18 @@ const Addresses = () => {
                                 </div>
 
                                 <div className="flex gap-4">
-                                    <button className="text-[10px] font-black uppercase tracking-widest border-b border-black pb-1 hover:text-blue-600 hover:border-blue-600 transition-colors">Edit</button>
-                                    <button className="text-[10px] font-black uppercase tracking-widest border-b border-red-500 pb-1 text-red-500 hover:text-red-700 hover:border-red-700 transition-colors">Hapus</button>
+                                    <button 
+                                        onClick={() => handleEditClick(addr)}
+                                        className="text-[10px] font-black uppercase tracking-widest border-b border-black pb-1 hover:text-blue-600 hover:border-blue-600 transition-colors"
+                                    >
+                                        Edit
+                                    </button>
+                                    <button 
+                                        onClick={() => handleDeleteAddress(addr.id)}
+                                        className="text-[10px] font-black uppercase tracking-widest border-b border-red-500 pb-1 text-red-500 hover:text-red-700 hover:border-red-700 transition-colors"
+                                    >
+                                        Hapus
+                                    </button>
                                 </div>
 
                                 <button className="absolute top-8 right-8 text-gray-200 hover:text-gray-900">
@@ -138,7 +185,7 @@ const Addresses = () => {
                 </div>
             )}
 
-            {/* Add Address Modal */}
+            {/* Modal */}
             <AnimatePresence>
                 {showAddModal && (
                     <>
@@ -147,7 +194,7 @@ const Addresses = () => {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[60]"
-                            onClick={() => setShowAddModal(false)}
+                            onClick={closeModal}
                         />
                         <motion.div 
                             initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -157,15 +204,19 @@ const Addresses = () => {
                         >
                             <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
                                 <div>
-                                    <h4 className="text-xs font-black uppercase tracking-widest">Tambah Alamat Baru</h4>
-                                    <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter mt-1">Lengkapi detail pengiriman Anda</p>
+                                    <h4 className="text-xs font-black uppercase tracking-widest">
+                                        {editingAddress ? 'Edit Alamat' : 'Tambah Alamat Baru'}
+                                    </h4>
+                                    <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter mt-1">
+                                        {editingAddress ? 'Perbarui detail pengiriman Anda' : 'Lengkapi detail pengiriman Anda'}
+                                    </p>
                                 </div>
-                                <button onClick={() => setShowAddModal(false)} className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center hover:bg-gray-50 transition-colors">
+                                <button onClick={closeModal} className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center hover:bg-gray-50 transition-colors">
                                     <X size={18} />
                                 </button>
                             </div>
 
-                            <form onSubmit={handleAddAddress} className="p-8 space-y-6">
+                            <form onSubmit={handleSubmit} className="p-8 space-y-6">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Label Alamat</label>
                                     <input 
@@ -218,8 +269,8 @@ const Addresses = () => {
                                     disabled={isSaving}
                                     className="w-full py-5 bg-black text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-100 disabled:opacity-50 flex items-center justify-center gap-3"
                                 >
-                                    {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
-                                    {isSaving ? 'Menyimpan...' : 'Simpan Alamat'}
+                                    {isSaving ? <Loader2 className="animate-spin" size={16} /> : (editingAddress ? <Save size={16} /> : <Plus size={16} />)}
+                                    {isSaving ? 'Menyimpan...' : (editingAddress ? 'Simpan Perubahan' : 'Simpan Alamat')}
                                 </button>
                             </form>
                         </motion.div>

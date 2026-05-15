@@ -352,10 +352,24 @@ const OrderManagement = () => {
                                     
                                     {selectedOrder.status === 'pending' ? (
                                         <div className="space-y-6">
-                                            <div className="aspect-video bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-3">
-                                                <Eye size={24} className="text-gray-300" />
-                                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">View Payment Evidence</p>
-                                            </div>
+                                            {selectedOrder.payment_proof || selectedOrder.payment_proof_url ? (
+                                                <div className="aspect-video bg-gray-50 rounded-2xl overflow-hidden border border-gray-100 group relative">
+                                                    <img 
+                                                        src={selectedOrder.payment_proof || selectedOrder.payment_proof_url} 
+                                                        alt="Bukti Transfer" 
+                                                        className="w-full h-full object-contain cursor-pointer"
+                                                        onClick={() => window.open(selectedOrder.payment_proof || selectedOrder.payment_proof_url, '_blank')}
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                                        <p className="text-[10px] font-black uppercase text-white tracking-widest">Klik untuk Memperbesar</p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="aspect-video bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-3 text-gray-400">
+                                                    <AlertCircle size={24} />
+                                                    <p className="text-[10px] font-black uppercase tracking-widest">Bukti Belum Diunggah</p>
+                                                </div>
+                                            )}
                                             <div className="grid grid-cols-2 gap-4">
                                                 <button 
                                                     disabled={isUpdating}

@@ -74,38 +74,35 @@ const Checkout = () => {
                 setIsLoadingShipping(true);
                 setError(null);
                 try {
-                    // In a real app, this would call an API like RajaOngkir
-                    // For now, we simulate with a slight delay
-                    const response = await fetch(`${API_URL}/shipping/rates`, {
+                    const payload = {
+                        address_id: selectedAddressId,
+                        items: cart.map(item => ({
+                            product_id: item.id,
+                            quantity: item.quantity
+                        }))
+                    };
+
+                    const response = await fetch(`${API_URL}/shipping/calculate`, {
                         method: 'POST',
                         headers: { 
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${token}` 
                         },
-                        body: JSON.stringify({
-                            address_id: selectedAddressId,
-                            weight: cart.reduce((total, item) => total + (item.quantity * 1000), 0) // default 1kg per item
-                        })
+                        body: JSON.stringify(payload)
                     });
 
                     if (response.ok) {
                         const data = await response.json();
-                        setShippingRates(data.rates || data.data || []);
+                        setShippingRates(data.rates || data.data?.rates || data.data || []);
                     } else {
-                        // Fallback/Mock data if API not implemented
-                        setShippingRates([
-                            { id: 'jne-reg', courier: 'JNE', service: 'Reguler', cost: 15000, etd: '2-4 Hari' },
-                            { id: 'sicepat-reg', courier: 'SiCepat', service: 'Reguler', cost: 14000, etd: '2-3 Hari' },
-                            { id: 'tiki-reg', courier: 'TIKI', service: 'Reguler', cost: 15000, etd: '2-4 Hari' }
-                        ]);
+                        const errorData = await response.json();
+                        setError(errorData.message || 'Gagal menghitung ongkos kirim');
+                        setShippingRates([]);
                     }
                 } catch (error) {
                     console.error('Failed to fetch shipping rates:', error);
-                    // Mock data fallback on error
-                    setShippingRates([
-                        { id: 'jne-reg', courier: 'JNE', service: 'Reguler', cost: 15000, etd: '2-4 Hari' },
-                        { id: 'sicepat-reg', courier: 'SiCepat', service: 'Reguler', cost: 14000, etd: '2-3 Hari' }
-                    ]);
+                    setError('Terjadi kesalahan koneksi saat menghitung ongkos kirim');
+                    setShippingRates([]);
                 } finally {
                     setIsLoadingShipping(false);
                 }

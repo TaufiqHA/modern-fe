@@ -9,6 +9,7 @@ import OrderConfirmation from './pages/OrderConfirmation';
 import Cart from './pages/Cart';
 import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext';
 
 import Collections from './pages/Collections';
 import CollectionDetail from './pages/CollectionDetail';
@@ -22,6 +23,7 @@ import Profile from './pages/Account/Profile';
 import Orders from './pages/Account/Orders';
 import JastipRequests from './pages/Account/JastipRequests';
 import Addresses from './pages/Account/Addresses';
+import Notifications from './pages/Account/Notifications';
 import Dashboard from './pages/Admin/Dashboard';
 import ProductManagement from './pages/Admin/ProductManagement';
 import OrderManagement from './pages/Admin/OrderManagement';
@@ -57,6 +59,7 @@ function AppContent() {
           <Route path="/account/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
           <Route path="/account/jastip" element={<ProtectedRoute><JastipRequests /></ProtectedRoute>} />
           <Route path="/account/addresses" element={<ProtectedRoute><Addresses /></ProtectedRoute>} />
+          <Route path="/account/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin" element={<AdminRoute><Dashboard /></AdminRoute>} />
           <Route path="/admin/products" element={<AdminRoute><ProductManagement /></AdminRoute>} />
@@ -74,11 +77,13 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <CartProvider>
-        <Router basename={import.meta.env.BASE_URL}>
-          <AppContent />
-        </Router>
-      </CartProvider>
+      <NotificationProvider>
+        <CartProvider>
+          <Router basename={import.meta.env.BASE_URL}>
+            <AppContent />
+          </Router>
+        </CartProvider>
+      </NotificationProvider>
     </AuthProvider>
   );
 }

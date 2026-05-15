@@ -8,7 +8,7 @@ interface AuthContextType {
   register: (data: { name: string; email: string; password?: string; phone?: string }) => Promise<void>;
   sendOtp: (phone: string) => Promise<void>;
   verifyOtp: (phone: string, otp: string) => Promise<void>;
-  updateUser: (data: Partial<User>) => Promise<void>;
+  updateUser: (data: FormData | Partial<User>) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
   isAdmin: boolean;
@@ -145,25 +145,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const updateUser = async (userData: Partial<User>) => {
+  const updateUser = async (data: FormData | Partial<User>) => {
     if (!token) return;
 
-    const response = await fetch(`${API_URL}/user/profile`, {
-      method: 'POST',
+    const isFormData = data instanceof FormData;
+
+    const response = await fetch(`${API_URL}/user/me`, {
+      method: 'PATCH',
       headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${token}`,
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' })
       },
-      body: JSON.stringify(userData)
+      body: isFormData ? data : JSON.stringify(data)
     });
 
-    const data = await response.json();
+    const result = await response.json();
 
-    if (!response.ok || data.status === 'error') {
-      throw new Error(data.message || 'Failed to update profile');
+    if (!response.ok || result.status === 'error') {
+      throw new Error(result.message || 'Failed to update profile');
     }
 
-    const updatedUser = data.user || data.data?.user || data.data;
+    const updatedUser = result.user || result.data?.user || result.data;
     if (updatedUser) {
       setUser(updatedUser);
     }

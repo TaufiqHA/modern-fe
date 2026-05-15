@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AdminLayout from './AdminLayout';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -13,9 +13,13 @@ import {
   History,
   TrendingDown,
   TrendingUp,
-  Filter
+  Filter,
+  Loader2
 } from 'lucide-react';
-import { PRODUCTS, CATEGORIES } from '../../data/products';
+import { useAuth } from '../../context/AuthContext';
+import { Product, Category, StockLog } from '../../types';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 const STOCK_HISTORY = [
   { id: 1, product: 'Essential White Sneakers', change: +10, type: 'In', note: 'Restock supplier', date: '12 Mei 2024, 14:20' },
@@ -26,22 +30,161 @@ const STOCK_HISTORY = [
 
 const ProductManagement = () => {
     const [view, setView] = useState<'list' | 'form'>('list');
-    const [editingProduct, setEditingProduct] = useState<any>(null);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [stockLogs, setStockLogs] = useState<StockLog[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const { token } = useAuth();
 
-    const filteredProducts = PRODUCTS.filter(p => 
+    const [formData, setFormData] = useState({
+        name: '',
+        price: 0,
+        category: '',
+        stock: 0,
+        description: '',
+        image: '',
+        rating: 0
+    });
+
+    const fetchProducts = async () => {
+        setIsLoading(true);
+        try {
+            const response = await fetch(`${API_URL}/products?limit=100`);
+            const data = await response.json();
+            setProducts(data.data || data.products || data || []);
+        } catch (error) {
+            console.error('Failed to fetch products:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const fetchCategories = async () => {
+        try {
+            const response = await fetch(`${API_URL}/categories`);
+            const data = await response.json();
+            setCategories(data.data || data || []);
+        } catch (error) {
+            console.error('Failed to fetch categories:', error);
+        }
+    };
+
+    useEffect(() => {
+        fetchProducts();
+        fetchCategories();
+    }, []);
+
+    useEffect(() => {
+        const fetchStockLogs = async () => {
+            if (!editingProduct || !token) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/admin/products/${editingProduct.id}/stock-logs`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                setStockLogs(data.data || data || []);
+            } catch (error) {
+                console.error('Failed to fetch stock logs:', error);
+            }
+        };
+
+        if (editingProduct) {
+            fetchStockLogs();
+        } else {
+            setStockLogs([]);
+        }
+    }, [editingProduct, token]);
+
+    const filteredProducts = products.filter(p => 
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.category.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const handleEdit = (product: any) => {
+    const handleEdit = (product: Product) => {
         setEditingProduct(product);
+        setFormData({
+            name: product.name,
+            price: product.price,
+            category: product.category,
+            stock: product.stock,
+            description: product.description || '',
+            image: product.image,
+            rating: product.rating
+        });
         setView('form');
     };
 
     const handleAddNew = () => {
         setEditingProduct(null);
+        setFormData({
+            name: '',
+            price: 0,
+            category: categories[0]?.name || '',
+            stock: 0,
+            description: '',
+            image: '',
+            rating: 0
+        });
         setView('form');
+    };
+
+    const handleDelete = async (id: number) => {
+        if (!window.confirm('Yakin ingin menghapus produk ini?')) return;
+        
+        try {
+            const response = await fetch(`${API_URL}/admin/products/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                fetchProducts();
+                alert('Produk berhasil dihapus');
+            } else {
+                alert('Gagal menghapus produk');
+            }
+        } catch (error) {
+            console.error('Failed to delete product:', error);
+            alert('Terjadi kesalahan saat menghapus produk');
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSaving(true);
+        
+        const method = editingProduct ? 'PATCH' : 'POST';
+        const url = editingProduct 
+            ? `${API_URL}/admin/products/${editingProduct.id}` 
+            : `${API_URL}/admin/products`;
+
+        try {
+            const response = await fetch(url, {
+                method,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(formData)
+            });
+            
+            if (response.ok) {
+                setView('list');
+                fetchProducts();
+                alert(`Produk berhasil ${editingProduct ? 'diperbarui' : 'ditambahkan'}`);
+            } else {
+                const errorData = await response.json();
+                alert(errorData.message || 'Gagal menyimpan produk');
+            }
+        } catch (error) {
+            console.error('Failed to save product:', error);
+            alert('Terjadi kesalahan saat menyimpan produk');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -90,7 +233,7 @@ const ProductManagement = () => {
                                 <div className="bg-blue-50 p-4 rounded-2xl border border-blue-50 flex items-center justify-between px-8">
                                     <div>
                                         <p className="text-[8px] font-black uppercase tracking-widest text-blue-400 mb-1">Total Produk</p>
-                                        <p className="text-xl font-black text-blue-600">{PRODUCTS.length}</p>
+                                        <p className="text-xl font-black text-blue-600">{products.length}</p>
                                     </div>
                                     <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center">
                                         <Package size={18} />
@@ -112,7 +255,13 @@ const ProductManagement = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
-                                            {filteredProducts.map((product) => (
+                                            {isLoading ? (
+                                                <tr>
+                                                    <td colSpan={5} className="px-8 py-20 text-center">
+                                                        <Loader2 className="animate-spin text-gray-200 mx-auto" size={32} />
+                                                    </td>
+                                                </tr>
+                                            ) : filteredProducts.map((product) => (
                                                 <tr key={product.id} className="hover:bg-gray-50/50 transition-colors group">
                                                     <td className="px-8 py-6">
                                                         <div className="flex items-center gap-4">
@@ -143,13 +292,23 @@ const ProductManagement = () => {
                                                             >
                                                                 <Edit2 size={16} />
                                                             </button>
-                                                            <button className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
+                                                            <button 
+                                                                onClick={() => handleDelete(product.id)}
+                                                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                            >
                                                                 <Trash2 size={16} />
                                                             </button>
                                                         </div>
                                                     </td>
                                                 </tr>
                                             ))}
+                                            {!isLoading && filteredProducts.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={5} className="px-8 py-10 text-center text-xs text-gray-400">
+                                                        Tidak ada produk ditemukan
+                                                    </td>
+                                                </tr>
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
@@ -205,22 +364,29 @@ const ProductManagement = () => {
                                 {editingProduct ? 'Edit Produk' : 'Tambah Produk Baru'}
                             </h2>
 
-                            <form className="space-y-10">
+                            <form onSubmit={handleSubmit} className="space-y-10">
                                 <div className="grid md:grid-cols-2 gap-10">
-                                    {/* Image Upload Placeholder */}
+                                    {/* Image URL Input instead of upload for simplicity in JSON payload */}
                                     <div className="space-y-4">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Foto Produk</label>
-                                        <div className="aspect-square bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-4 group hover:border-blue-500 transition-colors cursor-pointer">
-                                            {editingProduct?.image ? (
-                                                <img src={editingProduct.image} alt="Preview" className="w-full h-full object-cover rounded-[2.5rem]" />
-                                            ) : (
-                                                <>
-                                                    <div className="w-16 h-16 rounded-3xl bg-gray-100 text-gray-400 flex items-center justify-center group-hover:bg-blue-50 group-hover:text-blue-600 transition-all">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Foto Produk (URL)</label>
+                                        <div className="space-y-4">
+                                            <input 
+                                                type="text" 
+                                                value={formData.image}
+                                                onChange={(e) => setFormData({...formData, image: e.target.value})}
+                                                className="w-full bg-gray-50 border border-gray-50 rounded-2xl px-6 py-4 text-xs font-bold focus:outline-none focus:border-gray-900 transition-colors"
+                                                placeholder="https://images.unsplash.com/..."
+                                            />
+                                            <div className="aspect-square bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-4 overflow-hidden">
+                                                {formData.image ? (
+                                                    <img src={formData.image} alt="Preview" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="text-gray-400 flex flex-col items-center gap-2">
                                                         <ImageIcon size={32} />
+                                                        <p className="text-[8px] font-black uppercase tracking-widest">Image Preview</p>
                                                     </div>
-                                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Upload Image</p>
-                                                </>
-                                            )}
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
 
@@ -229,8 +395,10 @@ const ProductManagement = () => {
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Nama Produk</label>
                                             <input 
+                                                required
                                                 type="text" 
-                                                defaultValue={editingProduct?.name}
+                                                value={formData.name}
+                                                onChange={(e) => setFormData({...formData, name: e.target.value})}
                                                 className="w-full bg-gray-50 border border-gray-50 rounded-2xl px-6 py-4 text-xs font-bold focus:outline-none focus:border-gray-900 transition-colors"
                                                 placeholder="Contoh: Modern Cotton Tee"
                                             />
@@ -238,8 +406,12 @@ const ProductManagement = () => {
                                         <div className="grid grid-cols-2 gap-6">
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Kategori</label>
-                                                <select className="w-full bg-gray-50 border border-gray-50 rounded-2xl px-6 py-4 text-xs font-bold focus:outline-none focus:border-gray-900 transition-colors appearance-none">
-                                                    {CATEGORIES.map(cat => (
+                                                <select 
+                                                    value={formData.category}
+                                                    onChange={(e) => setFormData({...formData, category: e.target.value})}
+                                                    className="w-full bg-gray-50 border border-gray-50 rounded-2xl px-6 py-4 text-xs font-bold focus:outline-none focus:border-gray-900 transition-colors appearance-none"
+                                                >
+                                                    {categories.map(cat => (
                                                         <option key={cat.id} value={cat.name}>{cat.name}</option>
                                                     ))}
                                                 </select>
@@ -247,8 +419,10 @@ const ProductManagement = () => {
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Harga (Rp)</label>
                                                 <input 
+                                                    required
                                                     type="number" 
-                                                    defaultValue={editingProduct?.price}
+                                                    value={formData.price}
+                                                    onChange={(e) => setFormData({...formData, price: Number(e.target.value)})}
                                                     className="w-full bg-gray-50 border border-gray-50 rounded-2xl px-6 py-4 text-xs font-bold focus:outline-none focus:border-gray-900 transition-colors"
                                                     placeholder="0"
                                                 />
@@ -256,10 +430,12 @@ const ProductManagement = () => {
                                         </div>
                                         <div className="grid grid-cols-2 gap-6">
                                             <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Stok Awal</label>
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Stok</label>
                                                 <input 
+                                                    required
                                                     type="number" 
-                                                    defaultValue={editingProduct?.stock}
+                                                    value={formData.stock}
+                                                    onChange={(e) => setFormData({...formData, stock: Number(e.target.value)})}
                                                     className="w-full bg-gray-50 border border-gray-50 rounded-2xl px-6 py-4 text-xs font-bold focus:outline-none focus:border-gray-900 transition-colors"
                                                     placeholder="0"
                                                 />
@@ -269,7 +445,8 @@ const ProductManagement = () => {
                                                 <input 
                                                     type="number" 
                                                     step="0.1"
-                                                    defaultValue={editingProduct?.rating}
+                                                    value={formData.rating}
+                                                    onChange={(e) => setFormData({...formData, rating: Number(e.target.value)})}
                                                     className="w-full bg-gray-50 border border-gray-50 rounded-2xl px-6 py-4 text-xs font-bold focus:outline-none focus:border-gray-900 transition-colors"
                                                     placeholder="0.0"
                                                 />
@@ -278,7 +455,8 @@ const ProductManagement = () => {
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-4">Deskripsi Produk</label>
                                             <textarea 
-                                                defaultValue={editingProduct?.description}
+                                                value={formData.description}
+                                                onChange={(e) => setFormData({...formData, description: e.target.value})}
                                                 rows={4}
                                                 className="w-full bg-gray-50 border border-gray-50 rounded-2xl px-6 py-4 text-xs font-bold focus:outline-none focus:border-gray-900 transition-colors resize-none"
                                                 placeholder="Tuliskan detail produk di sini..."
@@ -297,12 +475,45 @@ const ProductManagement = () => {
                                     </button>
                                     <button 
                                         type="submit"
-                                        className="flex-[2] flex items-center justify-center gap-3 bg-black text-white px-8 py-5 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-gray-100"
+                                        disabled={isSaving}
+                                        className="flex-[2] flex items-center justify-center gap-3 bg-black text-white px-8 py-5 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-gray-100 disabled:opacity-50"
                                     >
-                                        <Save size={16} /> Simpan Produk
+                                        {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} 
+                                        {isSaving ? 'Menyimpan...' : 'Simpan Produk'}
                                     </button>
                                 </div>
                             </form>
+
+                            {/* Stock Mutation History */}
+                            {editingProduct && (
+                                <div className="mt-20 border-t border-gray-100 pt-12">
+                                    <h3 className="text-sm font-black uppercase tracking-widest mb-8">Riwayat Mutasi Stok</h3>
+                                    <div className="space-y-4">
+                                        {stockLogs.length > 0 ? (
+                                            stockLogs.map((log) => (
+                                                <div key={log.id} className="flex justify-between items-center p-6 bg-gray-50 rounded-[2rem] border border-gray-50/50">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${log.type === 'In' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                                            {log.type === 'In' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[10px] font-black uppercase tracking-tight text-gray-900">{log.note}</p>
+                                                            <p className="text-[8px] text-gray-400 font-bold">{new Date(log.date).toLocaleString('id-ID')}</p>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`text-sm font-black ${log.type === 'In' ? 'text-green-600' : 'text-red-600'}`}>
+                                                        {log.type === 'In' ? '+' : ''}{log.change}
+                                                    </span>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="p-10 text-center bg-gray-50 rounded-[2rem] border border-dashed border-gray-100">
+                                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Belum ada riwayat perubahan stok</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </motion.div>
                     )}
                 </AnimatePresence>

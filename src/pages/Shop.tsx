@@ -15,6 +15,15 @@ const Shop = () => {
   const [lastPage, setLastPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [priceRange, setPriceRange] = useState({ min: 0, max: 2000000 });
+  const [debouncedPriceRange, setDebouncedPriceRange] = useState({ min: 0, max: 2000000 });
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedPriceRange(priceRange);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [priceRange]);
 
   const fetchCategories = async () => {
     try {
@@ -29,7 +38,7 @@ const Shop = () => {
     }
   };
 
-  const fetchProducts = async (page: number, category: string, append: boolean = false) => {
+  const fetchProducts = async (page: number, category: string, append: boolean = false, minPrice: number, maxPrice: number) => {
     if (append) setIsFetchingMore(true);
     else setIsLoading(true);
 
@@ -37,6 +46,8 @@ const Shop = () => {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: '8',
+        min_price: minPrice.toString(),
+        max_price: maxPrice.toString(),
       });
       if (category !== 'Semua') {
         params.append('category', category);
@@ -68,14 +79,14 @@ const Shop = () => {
   }, []);
 
   useEffect(() => {
-    fetchProducts(1, selectedCategory, false);
+    fetchProducts(1, selectedCategory, false, debouncedPriceRange.min, debouncedPriceRange.max);
     setCurrentPage(1);
-  }, [selectedCategory]);
+  }, [selectedCategory, debouncedPriceRange]);
 
   const handleLoadMore = () => {
     if (currentPage < lastPage) {
       const nextPage = currentPage + 1;
-      fetchProducts(nextPage, selectedCategory, true);
+      fetchProducts(nextPage, selectedCategory, true, debouncedPriceRange.min, debouncedPriceRange.max);
       setCurrentPage(nextPage);
     }
   };
@@ -89,33 +100,78 @@ const Shop = () => {
           <p className="text-gray-400 font-medium max-w-md">Jelajahi koleksi essensial kami yang dikurasi dengan presisi untuk kenyamanan dan gaya Anda.</p>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-16 gap-8 border-b border-gray-50 pb-8">
-            <div className="flex items-center gap-4 overflow-x-auto no-scrollbar pb-2 md:pb-0">
-                <button 
-                    onClick={() => setSelectedCategory('Semua')}
-                    className={`text-[10px] font-black uppercase tracking-[0.2em] px-4 py-2 rounded-full transition-all ${
-                        selectedCategory === 'Semua' ? 'bg-black text-white' : 'text-gray-400 hover:text-gray-900'
-                    }`}
-                >
-                    Semua
-                </button>
-                {Array.isArray(categories) && categories.map(cat => (
+        {/* Filters and Price Slider */}
+        <div className="space-y-8 mb-16 border-b border-gray-50 pb-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+                <div className="flex items-center gap-4 overflow-x-auto no-scrollbar pb-2 md:pb-0">
                     <button 
-                        key={cat.id}
-                        onClick={() => setSelectedCategory(cat.name)}
-                        className={`text-[10px] font-black uppercase tracking-[0.2em] px-4 py-2 rounded-full transition-all whitespace-nowrap ${
-                            selectedCategory === cat.name ? 'bg-black text-white' : 'text-gray-400 hover:text-gray-900'
+                        onClick={() => setSelectedCategory('Semua')}
+                        className={`text-[10px] font-black uppercase tracking-[0.2em] px-4 py-2 rounded-full transition-all ${
+                            selectedCategory === 'Semua' ? 'bg-black text-white' : 'text-gray-400 hover:text-gray-900'
                         }`}
                     >
-                        {cat.name}
+                        Semua
                     </button>
-                ))}
+                    {Array.isArray(categories) && categories.map(cat => (
+                        <button 
+                            key={cat.id}
+                            onClick={() => setSelectedCategory(cat.name)}
+                            className={`text-[10px] font-black uppercase tracking-[0.2em] px-4 py-2 rounded-full transition-all whitespace-nowrap ${
+                                selectedCategory === cat.name ? 'bg-black text-white' : 'text-gray-400 hover:text-gray-900'
+                            }`}
+                        >
+                            {cat.name}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex items-center gap-2 text-gray-400">
+                    <Filter size={14} />
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">Filter</span>
+                </div>
             </div>
 
-            <div className="flex items-center gap-2 text-gray-400">
-                <Filter size={14} />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em]">Filter</span>
+            {/* Price Range Slider */}
+            <div className="max-w-md">
+                <div className="flex justify-between items-center mb-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Rentang Harga</h4>
+                    <p className="text-[10px] font-black uppercase tracking-widest">
+                        Rp {priceRange.min.toLocaleString()} - Rp {priceRange.max.toLocaleString()}
+                    </p>
+                </div>
+                <div className="relative h-2 bg-gray-100 rounded-full mb-6">
+                    <div 
+                        className="absolute h-full bg-black rounded-full"
+                        style={{
+                            left: `${(priceRange.min / 2000000) * 100}%`,
+                            right: `${100 - (priceRange.max / 2000000) * 100}%`
+                        }}
+                    />
+                    <input 
+                        type="range"
+                        min="0"
+                        max="2000000"
+                        step="50000"
+                        value={priceRange.min}
+                        onChange={(e) => {
+                            const val = Math.min(Number(e.target.value), priceRange.max - 50000);
+                            setPriceRange({ ...priceRange, min: val });
+                        }}
+                        className="absolute w-full top-0 h-2 bg-transparent appearance-none pointer-events-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-black [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white"
+                    />
+                    <input 
+                        type="range"
+                        min="0"
+                        max="2000000"
+                        step="50000"
+                        value={priceRange.max}
+                        onChange={(e) => {
+                            const val = Math.max(Number(e.target.value), priceRange.min + 50000);
+                            setPriceRange({ ...priceRange, max: val });
+                        }}
+                        className="absolute w-full top-0 h-2 bg-transparent appearance-none pointer-events-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-black [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white"
+                    />
+                </div>
             </div>
         </div>
 

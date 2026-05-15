@@ -13,8 +13,12 @@ import {
   Plane,
   X,
   RefreshCw,
-  ShoppingBag
+  ShoppingBag,
+  Loader2
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 const REQUESTS_MOCK = [
   {
@@ -41,8 +45,10 @@ const REQUESTS_MOCK = [
 ];
 
 const RequestManagement = () => {
+    const { token } = useAuth();
     const [view, setView] = useState<'list' | 'quote'>('list');
     const [selectedReq, setSelectedReq] = useState<any>(null);
+    const [isConverting, setIsConverting] = useState<string | null>(null);
     const [quoteData, setQuoteData] = useState({
         base: '',
         fee: '250000',
@@ -70,6 +76,35 @@ const RequestManagement = () => {
         const fee = parseInt(quoteData.fee) || 0;
         const tax = parseInt(quoteData.tax) || 0;
         return base + fee + tax;
+    };
+
+    const handleConvertToPO = async (reqId: string) => {
+        if (!window.confirm('Apakah Anda yakin ingin mengkonversi Jastip ini menjadi Pre-Order?')) {
+            return;
+        }
+
+        setIsConverting(reqId);
+        try {
+            const response = await fetch(`${API_URL}/admin/jastip/${reqId}/convert`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                alert('Berhasil! Jastip telah dikonversi menjadi Pre-Order.');
+            } else {
+                const error = await response.json();
+                alert(error.message || 'Gagal mengkonversi Jastip ke PO.');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Terjadi kesalahan koneksi.');
+        } finally {
+            setIsConverting(null);
+        }
     };
 
     return (
@@ -155,8 +190,17 @@ const RequestManagement = () => {
                                                             >
                                                                 <DollarSign size={12} /> {req.quote ? 'Edit Quote' : 'Add Quote'}
                                                             </button>
-                                                            <button className="flex items-center gap-2 bg-gray-100 text-gray-900 px-5 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all">
-                                                                <RefreshCw size={12} /> Convert to PO
+                                                            <button 
+                                                                onClick={() => handleConvertToPO(req.id)}
+                                                                disabled={isConverting === req.id || req.status === 'Pending'}
+                                                                className="flex items-center gap-2 bg-gray-100 text-gray-900 px-5 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all disabled:opacity-50"
+                                                            >
+                                                                {isConverting === req.id ? (
+                                                                    <Loader2 size={12} className="animate-spin" />
+                                                                ) : (
+                                                                    <RefreshCw size={12} />
+                                                                )}
+                                                                Convert to PO
                                                             </button>
                                                         </div>
                                                     </td>
